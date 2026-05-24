@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const gis = require('../services/gisService');
+const ai = require('../services/aiClient');
 
 // POST /api/titles — Enregistrement d'un nouveau titre
 router.post('/', async (req, res) => {
@@ -18,20 +19,38 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // 2. Si OK, insérer dans PostGIS
+    // 2. Analyser le risque avec l'IA
+    const aiResult = await ai.analyzeRisk({
+      titleID,
+      owner,
+      area_m2,
+      mutation_count: 0,
+      days_since_last_mutation: 0
+    });
+
+    // 3. Si l'IA détecte une anomalie, bloquer ou alerter
+    if (aiResult.requires_review) {
+      return res.status(403).json({
+        error: 'FRAUDE_SUSPECTEE',
+        ai_score: aiResult.anomaly_score,
+        risk_percentage: aiResult.risk_percentage,
+        message: 'Transaction suspecte détectée par l\'IA'
+      });
+    }
+
+    // 4. Insérer dans PostGIS
     const newParcel = await gis.insertParcel(
       titleID, owner, nationalID, geometry, area_m2
     );
-
-    // 3. TODO: Appeler le service IA (à venir)
-    // 4. TODO: Appeler la blockchain Hyperledger Fabric (à venir)
 
     res.status(201).json({
       success: true,
       titleID,
       gis_id: newParcel.id,
+      ai_status: aiResult.label,
+      risk_score: aiResult.risk_percentage,
       geojson: JSON.parse(newParcel.geojson),
-      message: 'Titre validé géospatialement, en attente de finalisation'
+      message: 'Titre enregistré avec succès'
     });
 
   } catch (err) {
@@ -40,11 +59,10 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/titles — Récupérer tous les titres pour la carte
+// GET /api/titles — Récupérer tous les titres
 router.get('/', async (req, res) => {
   try {
     const parcels = await gis.getAllParcels();
-    // Convertir en format GeoJSON FeatureCollection
     const features = parcels.map(p => ({
       type: 'Feature',
       geometry: JSON.parse(p.geojson),
