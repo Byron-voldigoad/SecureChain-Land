@@ -54,4 +54,4 @@ function geoJSONToWKT(geojson) {
   return geojson;
 }
 
-module.exports = { checkOverlaps, insertParcel, getAllParcels };
+module.exports = { checkOverlaps, insertParcel, getAllParcels };module.exports = { checkOverlaps, insertParcel, getAllParcels, pool };

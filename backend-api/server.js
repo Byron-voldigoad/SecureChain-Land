@@ -6,6 +6,9 @@ const titlesRouter = require('./routes/titles');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+const errorHandler = require('./middleware/errorHandler');
+
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -21,3 +24,5 @@ app.get('/health', (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ API SecureChain-Land démarrée sur http://localhost:${PORT}`);
 });
+
+app.use(errorHandler);

@@ -2,15 +2,15 @@ const express = require('express');
 const router = express.Router();
 const gis = require('../services/gisService');
 const ai = require('../services/aiClient');
+const pool = require('../services/gisService').pool; // on récupère le pool
 
-// POST /api/titles — Enregistrement d'un nouveau titre
-router.post('/', async (req, res) => {
+// POST /api/titles
+router.post('/', async (req, res, next) => {
   try {
     const { titleID, owner, nationalID, geometry, area_m2 } = req.body;
 
-    // 1. Vérifier les chevauchements géospatiaux
+    // Vérifier les chevauchements
     const overlaps = await gis.checkOverlaps(geometry);
-    
     if (overlaps.length > 0) {
       return res.status(409).json({
         error: 'CHEVAUCHEMENT_DETECTE',
@@ -19,48 +19,34 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // 2. Analyser le risque avec l'IA
-    const aiResult = await ai.analyzeRisk({
-      titleID,
-      owner,
-      area_m2,
-      mutation_count: 0,
-      days_since_last_mutation: 0
-    });
-
-    // 3. Si l'IA détecte une anomalie, bloquer ou alerter
+    // Analyse IA (mock)
+    const aiResult = await ai.analyzeRisk({ titleID, owner, area_m2 });
     if (aiResult.requires_review) {
       return res.status(403).json({
         error: 'FRAUDE_SUSPECTEE',
         ai_score: aiResult.anomaly_score,
-        risk_percentage: aiResult.risk_percentage,
-        message: 'Transaction suspecte détectée par l\'IA'
+        risk_percentage: aiResult.risk_percentage
       });
     }
 
-    // 4. Insérer dans PostGIS
-    const newParcel = await gis.insertParcel(
-      titleID, owner, nationalID, geometry, area_m2
-    );
+    // Insérer dans PostGIS
+    const newParcel = await gis.insertParcel(titleID, owner, nationalID, geometry, area_m2);
 
     res.status(201).json({
       success: true,
       titleID,
       gis_id: newParcel.id,
       ai_status: aiResult.label,
-      risk_score: aiResult.risk_percentage,
       geojson: JSON.parse(newParcel.geojson),
-      message: 'Titre enregistré avec succès'
+      message: 'Titre enregistré'
     });
-
   } catch (err) {
-    console.error('[API ERROR]', err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
-// GET /api/titles — Récupérer tous les titres
-router.get('/', async (req, res) => {
+// GET /api/titles (toutes)
+router.get('/', async (req, res, next) => {
   try {
     const parcels = await gis.getAllParcels();
     const features = parcels.map(p => ({
@@ -73,13 +59,28 @@ router.get('/', async (req, res) => {
         created_at: p.created_at
       }
     }));
-    
-    res.json({
-      type: 'FeatureCollection',
-      features
-    });
+    res.json({ type: 'FeatureCollection', features });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
+  }
+});
+
+// GET /api/titles/:id (unitaire)
+router.get('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `SELECT titre_id, proprietaire, cni, superficie_m2, 
+              ST_AsGeoJSON(geom) as geojson, created_at 
+       FROM parcelles WHERE titre_id = $1`,
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Titre non trouvé' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
   }
 });
 
