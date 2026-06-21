@@ -1,13 +1,13 @@
 const { Pool } = require('pg');
 
 const pool = new Pool({
-  host: process.env.POSTGIS_HOST,
-  database: process.env.POSTGIS_DB,
-  user: process.env.POSTGIS_USER,
-  password: process.env.POSTGIS_PASSWORD,
-  port: process.env.POSTGIS_PORT,
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
 });
-
+console.log("Mot de passe lu :", process.env.DB_PASSWORD);
 // Vérifier les chevauchements avant enregistrement
 async function checkOverlaps(geometryGeoJSON) {
   const geomWKT = geoJSONToWKT(geometryGeoJSON);
