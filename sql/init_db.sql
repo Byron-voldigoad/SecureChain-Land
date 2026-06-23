@@ -1,7 +1,7 @@
 -- Activer PostGIS
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- Créer la table
+-- Créer la table parcelles
 CREATE TABLE IF NOT EXISTS parcelles (
   id SERIAL PRIMARY KEY,
   titre_id VARCHAR(50) UNIQUE NOT NULL,
@@ -10,6 +10,16 @@ CREATE TABLE IF NOT EXISTS parcelles (
   superficie_m2 NUMERIC(12, 2),
   geom GEOMETRY(Polygon, 4326) NOT NULL,
   created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Créer la table audit_chain
+CREATE TABLE IF NOT EXISTS audit_chain (
+  id SERIAL PRIMARY KEY,
+  title_id VARCHAR(50) NOT NULL,
+  payload JSONB NOT NULL,
+  previous_hash VARCHAR(64),
+  current_hash VARCHAR(64) NOT NULL,
+  timestamp TIMESTAMP DEFAULT NOW()
 );
 
 -- Créer l'index spatial

@@ -4,6 +4,8 @@ import { useTitles } from "../hooks/useTitles";
 import MapComponent from "../components/MapComponent";
 import TitleTable from "../components/TitleTable";
 import TitleForm from "../components/TitleForm";
+import BlockchainTable from "../components/BlockchainTable"; // Ajout
+import AiAnalysisCard from "../components/AiAnalysisCard"; // Ajout
 
 const Dashboard: React.FC = () => {
   const {
@@ -12,10 +14,17 @@ const Dashboard: React.FC = () => {
     error,
     successMessage,
     conflictingTitles,
+    blockchain, // Ajout
     addTitle,
+    aiRejectError, // Ajout
   } = useTitles();
   const [geojsonInput, setGeojsonInput] = useState<string>("");
   const [calculatedArea, setCalculatedArea] = useState<number>(0);
+  const [lastAiResult, setLastAiResult] = useState<{
+    status: string;
+    score_risque: number;
+    statut_ia: string;
+  } | null>(null); // Ajout
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -82,6 +91,35 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           )}
+          {aiRejectError && (
+            <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl flex items-start gap-3 animate-fade-in shadow-sm">
+              <svg
+                className="w-5 h-5 text-orange-500 mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-orange-800">
+                  Transaction refusée par l'IA: {aiRejectError.status}
+                </p>
+                <p className="text-xs text-orange-700 mt-1">
+                  Score de risque:{" "}
+                  {(aiRejectError.score_risque * 100).toFixed(2)}%
+                </p>
+                <p className="text-xs text-orange-700 mt-1">
+                  Motif: {aiRejectError.statut_ia}
+                </p>
+              </div>
+            </div>
+          )}
           {successMessage && (
             <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl flex items-start gap-3 animate-fade-in shadow-sm">
               <svg
@@ -125,12 +163,37 @@ const Dashboard: React.FC = () => {
                 Enregistrer une parcelle
               </h2>
               <TitleForm
-                onSubmit={addTitle}
+                onSubmit={async (title) => {
+                  try {
+                    const response = await addTitle(title); // addTitle est maintenant async et retourne la réponse
+                    setLastAiResult(response.ai); // Sauvegarder le résultat IA
+                  } catch (err: any) {
+                    // Gérer l'erreur d'enregistrement (chevauchement, IA suspecte)
+                    console.error(
+                      "Erreur lors de l'enregistrement depuis le formulaire",
+                      err,
+                    );
+                    if (
+                      err.response &&
+                      err.response.data &&
+                      err.response.data.ai
+                    ) {
+                      setLastAiResult(err.response.data.ai);
+                    }
+                  }
+                }}
                 onGeoJSONChange={setGeojsonInput}
                 geojsonInput={geojsonInput}
                 initialArea={calculatedArea}
               />
             </div>
+            {lastAiResult && (
+              <AiAnalysisCard
+                aiStatus={lastAiResult.status}
+                aiScore={lastAiResult.score_risque}
+                aiMessage={lastAiResult.statut_ia}
+              />
+            )}
           </div>
 
           <div className="lg:col-span-8">
@@ -164,6 +227,9 @@ const Dashboard: React.FC = () => {
           </div>
           <TitleTable titles={titles} />
         </div>
+
+        {/* Nouvelle section Blockchain */}
+        <BlockchainTable blockchain={blockchain} />
       </main>
 
       <footer className="max-w-7xl mx-auto px-4 py-12 text-center">

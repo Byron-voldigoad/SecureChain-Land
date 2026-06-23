@@ -3,8 +3,12 @@ export interface Title {
   owner: string;
   nationalID: string;
   area_m2: number;
-  geometry: any; // GeoJSON Polygon object
+  montant: number;
+  historique_mutations: number;
+  geometry: any;
   created_at?: string;
+  ai_status?: string;
+  ai_score?: number;
 }
 
 export interface Conflict {

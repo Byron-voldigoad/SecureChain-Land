@@ -9,7 +9,13 @@ interface UseTitlesResult {
   error: string | null;
   successMessage: string | null;
   conflictingTitles: Title[] | null;
-  addTitle: (title: Omit<Title, "created_at">) => Promise<void>;
+  blockchain: any[];
+  aiRejectError: {
+    status: string;
+    score_risque: number;
+    statut_ia: string;
+  } | null; // Ajout
+  addTitle: (title: Omit<Title, "created_at">) => Promise<any>; // Modifier pour retourner any
   refreshTitles: () => Promise<void>;
 }
 
@@ -21,32 +27,54 @@ export const useTitles = (): UseTitlesResult => {
   const [conflictingTitles, setConflictingTitles] = useState<Title[] | null>(
     null,
   );
+  const [blockchain, setBlockchain] = useState<any[]>([]);
+  const [aiRejectError, setAiRejectError] = useState<{
+    status: string;
+    score_risque: number;
+    statut_ia: string;
+  } | null>(null); // Ajout
+
+  const fetchBlockchain = async () => {
+    try {
+      const response = await axios.get(
+        "http://localhost:5000/api/titles/blockchain",
+      );
+      setBlockchain(response.data);
+    } catch (err) {
+      console.error("Erreur chargement blockchain", err);
+    }
+  };
 
   const fetchTitles = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await getTitles();
-      // Si le backend retourne une FeatureCollection (GeoJSON), on extrait les titres des 'features'
       if (
         data &&
         (data as any).type === "FeatureCollection" &&
         Array.isArray((data as any).features)
       ) {
         const transformedTitles = (data as any).features.map((feature: any) => {
-          console.log("DEBUG FEATURE:", feature); // <-- LOG AJOUTÉ
           return {
             ...feature.properties,
-            geometry: feature.geometry || feature.geom || null, // On teste les noms possibles
+            geometry: feature.geometry || feature.geom || null,
           };
         });
-        setTitles(transformedTitles);
+        const titlesWithAiStatus = transformedTitles.map((title: any) => ({
+          ...title,
+          // On récupère le aiStatus directement de la réponse du backend
+          aiStatus:
+            title.aiStatus ||
+            (title.ai?.status === "SUSPECT" ? "SUSPECT" : "NORMAL"), // Fallback au cas où
+        }));
+        setTitles(titlesWithAiStatus);
       } else if (Array.isArray(data)) {
         setTitles(data);
       } else {
-        console.warn("Format de données inattendu reçu de l'API:", data);
         setTitles([]);
       }
+      await fetchBlockchain();
     } catch (err) {
       setError("Failed to fetch titles.");
       console.error(err);
@@ -63,14 +91,15 @@ export const useTitles = (): UseTitlesResult => {
     setError(null);
     setSuccessMessage(null);
     setConflictingTitles(null);
+    setAiRejectError(null); // Clear AI reject error on new attempt
+
     try {
-      console.log("Data sending to backend:", title);
       const newTitle = await createTitle(title);
-      await fetchTitles(); // Recharger la liste après l'ajout
+      await fetchTitles();
       setTitles((prev) => [...prev, newTitle]);
-      setSuccessMessage("Title foncier créé avec succès!");
-      // Clear success message after some time
+      setSuccessMessage("Titre foncier créé avec succès!");
       setTimeout(() => setSuccessMessage(null), 5000);
+      return newTitle; // Return the new title (which might include ai result from backend)
     } catch (err) {
       if (
         axios.isAxiosError(err) &&
@@ -78,15 +107,25 @@ export const useTitles = (): UseTitlesResult => {
         err.response.status === 409
       ) {
         const conflictData: Conflict = err.response.data;
-        setError(`Conflict: ${conflictData.message}`);
+        setError(`Conflit: ${conflictData.message}`);
         setConflictingTitles(conflictData.conflictingTitles);
+      } else if (
+        axios.isAxiosError(err) &&
+        err.response &&
+        err.response.status === 403 &&
+        err.response.data.ai
+      ) {
+        // AI rejection error
+        setAiRejectError(err.response.data.ai);
+        setError("Transaction bloquée par l'IA."); // Set a general error too
+        setTimeout(() => setAiRejectError(null), 10000);
       } else {
         setError("Erreur lors de la création du titre foncier.");
         console.error(err);
       }
-      // Clear error message after some time
       setTimeout(() => setError(null), 10000);
       setTimeout(() => setConflictingTitles(null), 10000);
+      throw err; // Re-throw to propagate error to Dashboard.tsx's onSubmit
     }
   };
 
@@ -96,6 +135,8 @@ export const useTitles = (): UseTitlesResult => {
     error,
     successMessage,
     conflictingTitles,
+    blockchain,
+    aiRejectError, // Ajout
     addTitle,
     refreshTitles: fetchTitles,
   };

@@ -5,7 +5,7 @@ interface TitleFormProps {
   onSubmit: (title: Omit<Title, "created_at">) => void;
   onGeoJSONChange: (geojson: string) => void;
   geojsonInput: string;
-  initialArea?: number; // Ajout pour calcul auto
+  initialArea?: number;
 }
 
 const TitleForm: React.FC<TitleFormProps> = ({
@@ -18,8 +18,9 @@ const TitleForm: React.FC<TitleFormProps> = ({
   const [owner, setOwner] = useState("");
   const [nationalID, setNationalID] = useState("");
   const [area_m2, setArea_m2] = useState<number>(0);
+  const [montant, setMontant] = useState<number>(0);
+  const [historique_mutations, setHistorique_mutations] = useState<number>(0);
 
-  // Mettre à jour si initialArea change (calculé par le dessin)
   React.useEffect(() => {
     if (initialArea) setArea_m2(initialArea);
   }, [initialArea]);
@@ -28,26 +29,21 @@ const TitleForm: React.FC<TitleFormProps> = ({
     e.preventDefault();
     try {
       const geojson = JSON.parse(geojsonInput);
-      console.log("Parsed GeoJSON:", geojson);
-      if (
-        !geojson ||
-        typeof geojson !== "object" ||
-        !geojson.type ||
-        !geojson.coordinates
-      ) {
-        throw new Error("GeoJSON structure invalide");
-      }
       onSubmit({
         titleID,
         owner,
         nationalID,
         area_m2,
-        geometry: geojson, // On renomme geojson en geometry pour correspondre au backend
+        montant,
+        historique_mutations,
+        geometry: geojson,
       });
       setTitleID("");
       setOwner("");
       setNationalID("");
       setArea_m2(0);
+      setMontant(0);
+      setHistorique_mutations(0);
       onGeoJSONChange("");
     } catch (err: any) {
       console.error("Form submission error:", err);
@@ -89,6 +85,34 @@ const TitleForm: React.FC<TitleFormProps> = ({
             placeholder="0.00"
             value={area_m2 || ""}
             onChange={(e) => setArea_m2(parseFloat(e.target.value))}
+            required
+          />
+        </div>
+        <div className="space-y-1">
+          <label htmlFor="montant" className={labelClasses}>
+            Montant (FCFA)
+          </label>
+          <input
+            type="number"
+            id="montant"
+            className={inputClasses}
+            value={montant || ""}
+            onChange={(e) => setMontant(parseFloat(e.target.value))}
+            required
+          />
+        </div>
+        <div className="space-y-1">
+          <label htmlFor="historique_mutations" className={labelClasses}>
+            Historique Mutations
+          </label>
+          <input
+            type="number"
+            id="historique_mutations"
+            className={inputClasses}
+            value={historique_mutations || ""}
+            onChange={(e) =>
+              setHistorique_mutations(parseFloat(e.target.value))
+            }
             required
           />
         </div>
